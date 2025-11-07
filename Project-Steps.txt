@@ -1,0 +1,229 @@
+## 🌍 Task: Create 2 EC2 Instances in 2 Regions & Install Nginx using Terraform
+
+### 🧠 What this task means:
+
+You’ll use **Terraform** to automatically create **two EC2 instances** in **two different AWS regions** (for example, one in **ap-south-1 (Mumbai)** and another in **us-east-1 (N. Virginia)**).
+
+After creating them, Terraform will also **install Nginx** on both servers automatically using a **remote-exec provisioner**.
+All of this will be done from your **AWS EC2 Ubuntu instance**, where Terraform is installed.
+
+---
+
+## ⚙️ Tech Stack
+
+* ☁️ **AWS EC2** → For creating servers
+* 🏗️ **Terraform** → To automate infrastructure creation
+* 💻 **AWS CLI** → For authentication and credentials
+
+---
+
+## 🧩 Prerequisites
+
+Before starting, make sure you have:
+
+1. 🪟 **AWS EC2 Ubuntu instance** (where you’ll run Terraform)
+
+2. ✅ **Terraform installed**
+
+   ```bash
+   sudo apt update
+   sudo apt install -y unzip
+   wget https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+   unzip terraform_1.6.6_linux_amd64.zip
+   sudo mv terraform /usr/local/bin/
+   terraform -version
+   ```
+
+3. 🔑 **AWS CLI configured**
+
+   ```bash
+   aws configure
+   ```
+
+   Enter your:
+
+   * AWS Access Key ID
+   * AWS Secret Access Key
+   * Default region (e.g., ap-south-1)
+   * Output format: json
+
+4. 🧾 **IAM User** with EC2 and IAM permissions
+
+---
+
+## 🚀 Steps to Perform the Task
+
+### 1️⃣ Create a Terraform Working Directory
+
+```bash
+mkdir terraform-nginx-multi-region
+cd terraform-nginx-multi-region
+```
+
+---
+
+### 2️⃣ Create a Terraform Script (`main.tf`)
+
+```hcl
+provider "aws" {
+  region = "ap-south-1"
+}
+
+provider "aws" {
+  alias  = "us"
+  region = "us-east-1"
+}
+
+# Security Group allowing SSH and HTTP
+resource "aws_security_group" "nginx_sg" {
+  name        = "nginx-sg"
+  description = "Allow SSH and HTTP inbound traffic"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Instance 1 - India
+resource "aws_instance" "india_ec2" {
+  ami           = "ami-0dee22c13ea7a9a67"
+  instance_type = "t2.micro"
+  security_groups = [aws_security_group.nginx_sg.name]
+  tags = {
+    Name = "India-Nginx"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update -y",
+      "sudo apt install nginx -y",
+      "sudo systemctl enable nginx",
+      "sudo systemctl start nginx"
+    ]
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = file("~/.ssh/id_rsa")
+    host        = self.public_ip
+  }
+}
+
+# Instance 2 - US Region
+resource "aws_instance" "us_ec2" {
+  provider      = aws.us
+  ami           = "ami-0866a3c8686eaeeba"
+  instance_type = "t2.micro"
+  security_groups = [aws_security_group.nginx_sg.name]
+  tags = {
+    Name = "US-Nginx"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update -y",
+      "sudo apt install nginx -y",
+      "sudo systemctl enable nginx",
+      "sudo systemctl start nginx"
+    ]
+  }
+
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = file("~/.ssh/id_rsa")
+    host        = self.public_ip
+  }
+}
+```
+
+---
+
+### 3️⃣ Initialize Terraform
+
+```bash
+terraform init
+```
+
+---
+
+### 4️⃣ Validate the Terraform Script
+
+```bash
+terraform validate
+```
+
+---
+
+### 5️⃣ Plan the Deployment
+
+```bash
+terraform plan
+```
+
+---
+
+### 6️⃣ Apply the Configuration
+
+```bash
+terraform apply -auto-approve
+```
+
+Terraform will:
+
+* Create one EC2 instance in **ap-south-1**
+* Create another in **us-east-1**
+* Install **Nginx** on both servers
+
+---
+
+### 7️⃣ Verify
+
+* Go to **AWS EC2 console** in both regions → check that both instances are running
+* Copy each instance’s **Public IP**
+* Open in browser:
+
+  ```
+  http://<Public-IP>
+  ```
+
+  You should see the **Nginx Welcome Page** 🎉
+
+---
+
+## 🧹 Cleanup
+
+When you’re done testing, destroy everything to avoid charges:
+
+```bash
+terraform destroy -auto-approve
+```
+
+---
+
+## 💡 Key Learnings
+
+✅ Automate creation of EC2 instances in **multiple regions**
+✅ Use **provisioners** to install software (Nginx) after instance creation
+✅ Understand how Terraform handles **multi-provider setups**
+
+---
+
